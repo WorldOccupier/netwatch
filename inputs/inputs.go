@@ -1,11 +1,14 @@
 package inputs
 
 import (
+	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 )
 
 var (
@@ -20,6 +23,9 @@ var (
 	up             = "up"
 	down           = "down"
 	backspace      = "backspace"
+
+	focusedStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
+	blurredStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
 )
 
 type model struct {
@@ -45,6 +51,14 @@ func (m model) getDefaultTextInput(i int) textinput.Model {
 	textInput.CharLimit = inputCharLimit
 	textInput.SetWidth(inputCharLimit)
 
+	style := textInput.Styles()
+	style.Cursor.Color = lipgloss.Color("205")
+	style.Focused.Prompt = focusedStyle
+	style.Focused.Text = focusedStyle
+	style.Blurred.Prompt = blurredStyle
+	style.Focused.Text = focusedStyle
+	textInput.SetStyles(style)
+
 	switch i {
 	case 0:
 		textInput.Placeholder = "Stocks and Shares"
@@ -68,6 +82,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.quitting = true
 			return m, tea.Quit
 		case tab, reverseTab, enter, up, down:
+			if msg.String() == enter && m.focusIndex == len(m.inputs) {
+				m.quitting = true
+				return m, tea.Batch()
+			}
 			cmds := m.handleMovement(&msg)
 			return m, tea.Batch(cmds...)
 		}
@@ -93,10 +111,10 @@ func (m *model) setFocusIndex(msg *tea.KeyPressMsg) {
 		m.focusIndex++
 	}
 
-	if m.focusIndex > len(m.inputs) - 1 {
+	if m.focusIndex > len(m.inputs) {
 		m.focusIndex = 0
 	} else if m.focusIndex < 0 {
-		m.focusIndex = len(m.inputs) - 1
+		m.focusIndex = len(m.inputs)
 	}
 }
 
@@ -134,11 +152,49 @@ func shouldUpdateInputs(msg tea.KeyPressMsg) bool {
 }
 
 func (m model) View() tea.View {
+	if m.quitting {
+		return m.resultsView()
+	}
+
+	return m.inputsView()
+}
+
+func (m model) resultsView() tea.View {
+	var total int64
+	for _, textInput := range m.inputs {
+		stringValue := textInput.Value()
+		if stringValue != "" {
+			intValue, err := strconv.ParseInt(stringValue, 10, 64)
+			if err != nil {
+				panic(err)
+			}
+			total += intValue
+		}
+	}
+	var stringBuilder strings.Builder
+	fmt.Fprintf(&stringBuilder, "%s", blurredStyle.Render("Total"))
+	stringBuilder.WriteRune('\n')
+	fmt.Fprintf(&stringBuilder, "%s", focusedStyle.Render(strconv.FormatInt(total, 10)))
+	stringBuilder.WriteRune('\n')
+	return tea.NewView(stringBuilder.String())
+}
+
+func (m model) inputsView() tea.View {
 	var stringBuilder strings.Builder
 	for i := range m.inputs {
 		stringBuilder.WriteString(m.inputs[i].View())
 		stringBuilder.WriteRune('\n')
 	}
+
+	focusedButton := lipgloss.NewStyle().Foreground(lipgloss.Color("#0cce2c")).Render("[ Submit ]")
+	blurredButton := fmt.Sprintf("[ %s ]", blurredStyle.Render("Submit"))
+
+	button := &blurredButton
+	if m.focusIndex == len(m.inputs) {
+		button = &focusedButton
+	}
+
+	fmt.Fprintf(&stringBuilder, "\n%s\n", *button)
 
 	return tea.NewView(stringBuilder.String())
 }
