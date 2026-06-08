@@ -82,9 +82,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.quitting = true
 			return m, tea.Quit
 		case tab, reverseTab, enter, up, down:
-			if msg.String() == enter && m.focusIndex == len(m.inputs) {
-				m.quitting = true
-				return m, tea.Batch()
+			if msg.String() == enter {
+				if m.quitting {
+					return m, tea.Quit
+				}
+				if m.focusIndex == len(m.inputs) {
+					m.quitting = true
+					m.save()
+					return m, tea.Batch()
+				}
 			}
 			cmds := m.handleMovement(&msg)
 			return m, tea.Batch(cmds...)
@@ -160,6 +166,16 @@ func (m model) View() tea.View {
 }
 
 func (m model) resultsView() tea.View {
+	total := m.total()
+	var stringBuilder strings.Builder
+	fmt.Fprintf(&stringBuilder, "%s", blurredStyle.Render("Total"))
+	stringBuilder.WriteRune('\n')
+	fmt.Fprintf(&stringBuilder, "%s", focusedStyle.Render(strconv.FormatInt(total, 10)))
+	stringBuilder.WriteRune('\n')
+	return tea.NewView(stringBuilder.String())
+}
+
+func (m model) total() int64 {
 	var total int64
 	for _, textInput := range m.inputs {
 		stringValue := textInput.Value()
@@ -171,12 +187,8 @@ func (m model) resultsView() tea.View {
 			total += intValue
 		}
 	}
-	var stringBuilder strings.Builder
-	fmt.Fprintf(&stringBuilder, "%s", blurredStyle.Render("Total"))
-	stringBuilder.WriteRune('\n')
-	fmt.Fprintf(&stringBuilder, "%s", focusedStyle.Render(strconv.FormatInt(total, 10)))
-	stringBuilder.WriteRune('\n')
-	return tea.NewView(stringBuilder.String())
+
+	return total
 }
 
 func (m model) inputsView() tea.View {
