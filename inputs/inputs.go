@@ -32,6 +32,7 @@ type model struct {
 	focusIndex int
 	inputs []textinput.Model
 	quitting bool
+	submitted bool
 }
 
 func InitModel() model {
@@ -42,6 +43,8 @@ func InitModel() model {
 	for i := range m.inputs {
 		m.inputs[i] = m.getDefaultTextInput(i)
 	}
+
+	m.loadLatestSavedDate()
 
 	return m
 }
@@ -61,10 +64,12 @@ func (m model) getDefaultTextInput(i int) textinput.Model {
 
 	switch i {
 	case 0:
-		textInput.Placeholder = "Stocks and Shares"
+		textInput.Placeholder = "$$$"
+		textInput.Prompt = "Stocks and Shares: "
 		textInput.Focus()
 	case 1:
-		textInput.Placeholder = "Savings"
+		textInput.Placeholder = "$$$"
+		textInput.Prompt = "Savings:           "
 	}
 
 	return textInput
@@ -83,11 +88,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		case tab, reverseTab, enter, up, down:
 			if msg.String() == enter {
-				if m.quitting {
+				if m.submitted {
 					return m, tea.Quit
 				}
 				if m.focusIndex == len(m.inputs) {
-					m.quitting = true
+					m.submitted = true
 					m.save()
 					return m, tea.Batch()
 				}
@@ -158,7 +163,7 @@ func shouldUpdateInputs(msg tea.KeyPressMsg) bool {
 }
 
 func (m model) View() tea.View {
-	if m.quitting {
+	if m.submitted {
 		return m.resultsView()
 	}
 
