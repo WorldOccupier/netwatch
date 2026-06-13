@@ -1,4 +1,4 @@
-package inputs
+package models
 
 import (
 	"bufio"
@@ -32,6 +32,8 @@ func (m model) save() {
 	}
 	defer file.Close()
 	var csvLine strings.Builder
+	csvLine.WriteString(m.currency.GetActiveValue())
+	csvLine.WriteString(valueSeparator)
 	for i := range m.inputs {
 		csvLine.WriteString(m.inputs[i].Value())
 		csvLine.WriteString(valueSeparator)
@@ -43,30 +45,30 @@ func (m model) save() {
 	}
 }
 
-func (m model) loadLatestSavedDate() {
+func loadLatestSavedDate() (string, []string) {
 	os.MkdirAll(directory, 0755)
 	_, err := os.Stat(filePath)
 	var file *os.File
 	if os.IsNotExist(err) {
 		// take a deep breadth, it's okay to skip
-		return
+		return "", []string{}
 	} else if err == nil {
 		file, err = os.Open(filePath)
 		if err != nil {
 			fmt.Println("Failed to open save file")
-			return
+			return "", []string{}
 		}
 		defer file.Close()
 		line := getLastLineFromFile(file)
 		lineData := strings.Split(line, valueSeparator)
-		if len(lineData) <= len(m.inputs) {
-			return
+		if len(lineData) <= 2 {
+			return "", []string{}
 		}
 
-		for i := range m.inputs {
-			m.inputs[i].SetValue(lineData[i])
-		}
+		return lineData[0], []string{lineData[1], lineData[2]}
 	}
+
+	return "", []string{}
 }
 
 func getLastLineFromFile(file *os.File) string {

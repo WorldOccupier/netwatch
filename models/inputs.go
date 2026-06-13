@@ -1,4 +1,4 @@
-package inputs
+package models
 
 import (
 	"fmt"
@@ -22,29 +22,48 @@ var (
 	enter          = "enter"
 	up             = "up"
 	down           = "down"
+	left 		   = "left"
+	right    	   = "right"
 	backspace      = "backspace"
+	currencyDisplayPosition = 0
+	focusedColor = "205"
 
-	focusedStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
+	focusedStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(focusedColor))
 	blurredStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
 )
 
 type model struct {
 	focusIndex int
+	currency currency
 	inputs []textinput.Model
 	quitting bool
 	submitted bool
+	count int
+	currencyIndex int
 }
 
 func InitModel() model {
-	m := model {
-		inputs: make([]textinput.Model, inptusCount),
+	savedCurrency, savedInputs := loadLatestSavedDate()
+	currencyValues := []string {"GBP", "INR"}
+	var savedCurrencyIndex int
+	for i := range currencyValues {
+		if currencyValues[i] == savedCurrency {
+			savedCurrencyIndex = i
+			break
+		}
 	}
+	inputCurrency := currency {values: currencyValues, focusIndex: savedCurrencyIndex}
+	m := model {
+		currency: inputCurrency,
+		inputs: make([]textinput.Model, inptusCount),
+		count: 4,
+	}
+	m.currency.isFocused = true
 
 	for i := range m.inputs {
 		m.inputs[i] = m.getDefaultTextInput(i)
+		m.inputs[i].SetValue(savedInputs[i])
 	}
-
-	m.loadLatestSavedDate()
 
 	return m
 }
@@ -54,25 +73,30 @@ func (m model) getDefaultTextInput(i int) textinput.Model {
 	textInput.CharLimit = inputCharLimit
 	textInput.SetWidth(inputCharLimit)
 
-	style := textInput.Styles()
-	style.Cursor.Color = lipgloss.Color("205")
-	style.Focused.Prompt = focusedStyle
-	style.Focused.Text = focusedStyle
-	style.Blurred.Prompt = blurredStyle
-	style.Focused.Text = focusedStyle
+	style := getInputStyle(textInput)
 	textInput.SetStyles(style)
+	inputPlaceholder := "$$$"
+	textInput.Placeholder = inputPlaceholder
 
 	switch i {
 	case 0:
-		textInput.Placeholder = "$$$"
 		textInput.Prompt = "Stocks and Shares: "
-		textInput.Focus()
 	case 1:
-		textInput.Placeholder = "$$$"
 		textInput.Prompt = "Savings:           "
 	}
 
 	return textInput
+}
+
+func getInputStyle(textInput textinput.Model) textinput.Styles {
+	style := textInput.Styles()
+	style.Cursor.Color = lipgloss.Color(focusedColor)
+	style.Focused.Prompt = focusedStyle
+	style.Focused.Text = focusedStyle
+	style.Blurred.Prompt = blurredStyle
+	style.Focused.Text = focusedStyle
+
+	return style
 }
 
 func (m model) Init() tea.Cmd {
@@ -91,7 +115,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if m.submitted {
 					return m, tea.Quit
 				}
-				if m.focusIndex == len(m.inputs) {
+				if m.focusIndex == m.count - 1 {
 					m.submitted = true
 					m.save()
 					return m, tea.Batch()
@@ -99,9 +123,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			cmds := m.handleMovement(&msg)
 			return m, tea.Batch(cmds...)
+		case left, right:
+			if m.focusIndex == currencyDisplayPosition {
+				currencyModel, cmd := m.currency.Update(msg)
+				m.currency = currencyModel.(currency)
+				return m, cmd
+			}
 		}
 
-		m.updateInputs(msg)
+		return m, m.updateInputs(msg)
 	}
 
 	return m, tea.Batch()
@@ -122,17 +152,22 @@ func (m *model) setFocusIndex(msg *tea.KeyPressMsg) {
 		m.focusIndex++
 	}
 
-	if m.focusIndex > len(m.inputs) {
+	if m.focusIndex >= m.count {
 		m.focusIndex = 0
 	} else if m.focusIndex < 0 {
-		m.focusIndex = len(m.inputs)
+		m.focusIndex = m.count - 1
+	}
+	if m.focusIndex == currencyDisplayPosition {
+		m.currency.isFocused = true
+	} else {
+		m.currency.isFocused = false
 	}
 }
 
 func (m *model) handleInputsFocus() []tea.Cmd {
 	cmds := make([]tea.Cmd, len(m.inputs))
-	for i := range m.inputs {
-		if i == m.focusIndex {
+	for i := range len(m.inputs) {
+		if i == m.focusIndex - 1  {
 			cmds[i] = m.inputs[i].Focus()
 			continue
 		}
@@ -198,6 +233,10 @@ func (m model) total() int64 {
 
 func (m model) inputsView() tea.View {
 	var stringBuilder strings.Builder
+
+	currencyView := m.currency.View()
+	stringBuilder.WriteString(currencyView.Content)
+	stringBuilder.WriteRune('\n')
 	for i := range m.inputs {
 		stringBuilder.WriteString(m.inputs[i].View())
 		stringBuilder.WriteRune('\n')
@@ -207,7 +246,7 @@ func (m model) inputsView() tea.View {
 	blurredButton := fmt.Sprintf("[ %s ]", blurredStyle.Render("Submit"))
 
 	button := &blurredButton
-	if m.focusIndex == len(m.inputs) {
+	if m.focusIndex == m.count - 1 {
 		button = &focusedButton
 	}
 
