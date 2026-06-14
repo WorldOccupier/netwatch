@@ -242,15 +242,5 @@ func (m model) inputsView() tea.View {
 		stringBuilder.WriteRune('\n')
 	}
 
-	focusedButton := lipgloss.NewStyle().Foreground(lipgloss.Color("#0cce2c")).Render("[ Submit ]")
-	blurredButton := fmt.Sprintf("[ %s ]", blurredStyle.Render("Submit"))
-
-	button := &blurredButton
-	if m.focusIndex == m.count - 1 {
-		button = &focusedButton
-	}
-
-	fmt.Fprintf(&stringBuilder, "\n%s\n", *button)
-
 	return tea.NewView(stringBuilder.String())
 }

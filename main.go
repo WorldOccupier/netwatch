@@ -7,7 +7,7 @@ import (
 )
 
 func main() {
-	_, err := tea.NewProgram(models.InitModel()).Run()
+	_, err := tea.NewProgram(models.InitDisplay()).Run()
 	if err != nil {
 		panic(err)
 	}
